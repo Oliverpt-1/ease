@@ -1,5 +1,5 @@
 [phases.install]
-cmd = "npm ci --legacy-peer-deps"
+cmd = "npm install --legacy-peer-deps"
 
 [phases.build] 
 cmd = "npm run build"
