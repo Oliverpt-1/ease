@@ -19,50 +19,61 @@ interface WalletCreationState {
   error?: string
 }
 
-function generateBioBitsFromEmbedding(embedding: number[]): string {
-  // Convert embedding array to deterministic 32-byte hex for bioBits
-  const embeddingString = embedding.join(',')
-  
-  // Simple hash function to create 32-byte hex (placeholder for real crypto hash)
-  let hash = ''
-  for (let i = 0; i < 64; i++) {
-    const char = embeddingString.charCodeAt(i % embeddingString.length)
-    hash += (char % 16).toString(16)
-  }
-  
-  return '0x' + hash
+async function captureImageAndGetEmbedding(
+  videoRef: React.RefObject<HTMLVideoElement | null>,
+  canvasRef: React.RefObject<HTMLCanvasElement | null>,
+  recognize: (blob: Blob) => Promise<any>
+): Promise<number[]> {
+  return new Promise((resolve, reject) => {
+    if (!videoRef.current || !canvasRef.current) {
+      reject(new Error("Video or canvas ref not available"))
+      return
+    }
+
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    
+    if (!ctx || video.readyState < video.HAVE_CURRENT_DATA) {
+      reject(new Error("Cannot capture image from video"))
+      return
+    }
+
+    canvas.width = video.videoWidth || 640
+    canvas.height = video.videoHeight || 480
+    
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    } catch (drawError) {
+      reject(new Error("Failed to draw image to canvas"))
+      return
+    }
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        reject(new Error("Failed to create image blob"))
+        return
+      }
+
+      try {
+        const result = await recognize(blob)
+        
+        if (!result.result?.[0]?.embedding) {
+          reject(new Error("No face detected or embedding not available"))
+          return
+        }
+
+        const embedding = result.result[0].embedding
+        resolve(embedding)
+      } catch (error) {
+        reject(error)
+      }
+    }, 'image/jpeg', 0.8)
+  })
 }
 
-async function deployKernelWithInit(bioBits: string, ensName: string): Promise<{ account: string; transactionHash: string }> {
-  // TODO: Implement actual wallet deployment with permissionless.js/ZeroDev
-  // This should:
-  // 1. Deploy Kernel smart account with FaceBioValidator pre-installed
-  // 2. Call FaceBioRegistry.register(bioBits, account) in init batch
-  
-  console.log('Deploying wallet with bioBits:', bioBits)
-  console.log('ENS name:', ensName)
-  
-  // Simulate deployment process
-  await new Promise(resolve => setTimeout(resolve, 2000))
-  
-  // Mock account address and transaction hash
-  const mockAccount = `0x${Math.random().toString(16).slice(2, 42).padStart(40, '0')}`
-  const mockTxHash = `0x${Math.random().toString(16).slice(2, 66).padStart(64, '0')}`
-  
-  return {
-    account: mockAccount,
-    transactionHash: mockTxHash
-  }
-}
-
-async function lzBroadcast(payload: { account: string; bioBits: string }): Promise<void> {
-  // TODO: Implement LayerZero cross-chain broadcast
-  // This should send { account, bioBits } to target chains: base, op, arb, etc.
-  
-  console.log('LayerZero broadcast (placeholder):', payload)
-  
-  // Simulate broadcast delay
-  await new Promise(resolve => setTimeout(resolve, 1000))
+async function deployContract(): Promise<void> {
+  // TODO: Implement contract deployment
 }
 
 export function WalletCreationFlow() {
@@ -108,37 +119,6 @@ export function WalletCreationFlow() {
     }
   }
 
-  const captureImage = (): Promise<Blob | null> => {
-    return new Promise((resolve) => {
-      if (!videoRef.current || !canvasRef.current) {
-        resolve(null)
-        return
-      }
-
-      const video = videoRef.current
-      const canvas = canvasRef.current
-      const ctx = canvas.getContext('2d')
-      
-      if (!ctx || video.readyState < video.HAVE_CURRENT_DATA) {
-        resolve(null)
-        return
-      }
-
-      canvas.width = video.videoWidth || 640
-      canvas.height = video.videoHeight || 480
-      
-      try {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-      } catch (drawError) {
-        resolve(null)
-        return
-      }
-
-      canvas.toBlob((blob) => {
-        resolve(blob)
-      }, 'image/jpeg', 0.8)
-    })
-  }
 
   const createWallet = async () => {
     if (!state.ensName.trim()) {
@@ -147,60 +127,29 @@ export function WalletCreationFlow() {
     }
 
     try {
-      // Step 1: Capture face
       setState(prev => ({ ...prev, status: 'capturing' }))
-      toast.info("Capturing face...")
+      toast.info("Capturing face and processing biometrics...")
       
-      const imageBlob = await captureImage()
-      if (!imageBlob) {
-        throw new Error("Failed to capture image")
-      }
-
-      // Step 2: Process biometrics and derive bioBits
-      setState(prev => ({ ...prev, status: 'processing' }))
-      toast.info("Processing biometrics...")
+      const embedding = await captureImageAndGetEmbedding(videoRef, canvasRef, recognize)
       
-      const result = await recognize(imageBlob)
-      
-      if (!result.result?.[0]?.embedding) {
-        throw new Error("No face detected or embedding not available")
-      }
-
-      const embedding = result.result[0].embedding
-      console.log('EMBEDDING:', embedding)
-      
-      const bioBits = generateBioBitsFromEmbedding(embedding)
-      console.log('Generated bioBits:', bioBits)
-
-      // Step 3: Deploy wallet with validator and registry
-      setState(prev => ({ ...prev, status: 'deploying', bioBits }))
-      toast.info("Deploying wallet...")
-      
-      const { account, transactionHash } = await deployKernelWithInit(bioBits, state.ensName)
-
-      // Step 4: Cross-chain broadcast
-      setState(prev => ({ ...prev, status: 'broadcasting', account, transactionHash }))
-      toast.info("Broadcasting to chains...")
-      
-      await lzBroadcast({ account, bioBits })
-
-      // Step 5: Complete
       setState(prev => ({ 
         ...prev,
         status: 'completed'
       }))
       
+      console.log('EMBEDDING:', embedding)
+      
       stopCamera()
-      toast.success("Wallet created successfully!")
+      toast.success("Biometrics processed successfully!")
       
     } catch (error) {
-      console.error("Wallet creation failed:", error)
+      console.error("Processing failed:", error)
       setState(prev => ({ 
         ...prev,
         status: 'idle', 
         error: error instanceof Error ? error.message : 'Unknown error' 
       }))
-      toast.error("Wallet creation failed")
+      toast.error("Biometric processing failed")
       stopCamera()
     }
   }
