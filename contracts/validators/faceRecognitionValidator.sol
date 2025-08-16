@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "../interfaces/IFaceRecognitionValidator.sol";
+import "../interfaces/IfaceRecognitionValidator.sol";
 import "../interfaces/ILayerZeroEndpoint.sol";
 import "../libraries/FacialHashLib.sol";
 import "../interfaces/IERC7579Module.sol";
