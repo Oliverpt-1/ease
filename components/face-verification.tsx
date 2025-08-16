@@ -53,44 +53,47 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
     }
   }
 
-  const captureImage = () => {
-    if (!videoRef.current || !canvasRef.current) return
-
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
-    
-    if (!ctx) return
-    if (video.readyState < video.HAVE_CURRENT_DATA) return
-
-    canvas.width = video.videoWidth || 640
-    canvas.height = video.videoHeight || 480
-    
-    try {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    } catch (drawError) {
-      return
-    }
-
-    canvas.toBlob((blob) => {
-      if (blob) {
-        setCapturedImage(blob)
+  const captureImage = (): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      if (!videoRef.current || !canvasRef.current) {
+        resolve(null)
+        return
       }
-    }, 'image/jpeg', 0.8)
+
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      const ctx = canvas.getContext('2d')
+      
+      if (!ctx || video.readyState < video.HAVE_CURRENT_DATA) {
+        resolve(null)
+        return
+      }
+
+      canvas.width = video.videoWidth || 640
+      canvas.height = video.videoHeight || 480
+      
+      try {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      } catch (drawError) {
+        resolve(null)
+        return
+      }
+
+      canvas.toBlob((blob) => {
+        resolve(blob)
+      }, 'image/jpeg', 0.8)
+    })
   }
 
   const handleVerification = async () => {
     setIsVerifying(true)
 
-    // Capture image
-    captureImage()
+    // Capture image and wait for it
+    const imageBlob = await captureImage()
     
-    // Wait for capture
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    if (capturedImage) {
+    if (imageBlob) {
       // Get embedding
-      const result = await recognize(capturedImage)
+      const result = await recognize(imageBlob)
       
       if (result.result?.[0]?.embedding) {
         console.log('EMBEDDING:', result.result[0].embedding)
