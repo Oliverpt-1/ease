@@ -25,7 +25,6 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
       setStream(mediaStream)
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream
-        await videoRef.current.play()
       }
     } catch (error) {
       console.error("Error accessing camera:", error)

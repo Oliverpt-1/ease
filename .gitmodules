@@ -1,9 +1,0 @@
-[submodule "lib/LayerZero-v2"]
-	path = lib/LayerZero-v2
-	url = https://github.com/LayerZero-Labs/LayerZero-v2
-[submodule "lib/kernel-7579-plugins"]
-	path = lib/kernel-7579-plugins
-	url = https://github.com/zerodevapp/kernel-7579-plugins
-[submodule "lib/erc7579-implementation"]
-	path = lib/erc7579-implementation
-	url = https://github.com/erc7579/erc7579-implementation
