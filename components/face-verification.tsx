@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useCompreface } from "@/components/use-compreface"
 import { ArrowLeft, Camera, CheckCircle } from "lucide-react"
 
 interface FaceVerificationProps {
@@ -15,17 +16,31 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
   const [isVerifying, setIsVerifying] = useState<boolean>(false)
   const [isVerified, setIsVerified] = useState<boolean>(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
+  const [capturedImage, setCapturedImage] = useState<Blob | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  
+  const { recognize, loading } = useCompreface()
+
+  // Effect to connect stream to video element when both are available
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      const video = videoRef.current
+      video.srcObject = stream
+      video.play().catch(() => {})
+    }
+  }, [stream])
 
   const startCamera = async () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+        video: { 
+          facingMode: "user",
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        }
       })
       setStream(mediaStream)
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream
-      }
     } catch (error) {
       console.error("Error accessing camera:", error)
     }
