@@ -232,7 +232,7 @@ contract FacialRecognitionValidator is IFaceRecognitionValidator, ILayerZeroRece
             return false;
         }
 
-        if (block.timestamp > timestampValue + 300) { // 5 minute validity
+        if (timestampValue > block.timestamp + 300 || timestampValue + 300 < block.timestamp) { // 5 minute validity window
             return false;
         }
 

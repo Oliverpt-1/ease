@@ -28,12 +28,11 @@ contract ModuleFactory {
         lzEndpoint = ILayerZeroEndpoint(_lzEndpoint);
     }
 
-    function deployFRVMValidator(address _lzEndpoint) external returns (address) {
-        FacialRecognitionValidator validator = new FacialRecognitionValidator(_lzEndpoint);
+    function registerExistingModule(address module, string memory version) external {
+        require(module != address(0), "Invalid module address");
+        require(!isDeployedModule[module], "Module already registered");
         
-        _registerModule(address(validator), "1.0.0");
-        
-        return address(validator);
+        _registerModule(module, version);
     }
 
     function predictValidatorAddress(
