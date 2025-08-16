@@ -53,17 +53,55 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
     }
   }
 
+  const captureImage = () => {
+    if (!videoRef.current || !canvasRef.current) return
+
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    
+    if (!ctx) return
+    if (video.readyState < video.HAVE_CURRENT_DATA) return
+
+    canvas.width = video.videoWidth || 640
+    canvas.height = video.videoHeight || 480
+    
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    } catch (drawError) {
+      return
+    }
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        setCapturedImage(blob)
+      }
+    }, 'image/jpeg', 0.8)
+  }
+
   const handleVerification = async () => {
     setIsVerifying(true)
 
-    // Simulate face verification process
-    await new Promise((resolve) => setTimeout(resolve, 3000))
+    // Capture image
+    captureImage()
+    
+    // Wait for capture
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    if (capturedImage) {
+      // Get embedding
+      const result = await recognize(capturedImage)
+      
+      if (result.result?.[0]?.embedding) {
+        console.log('EMBEDDING:', result.result[0].embedding)
+      }
+    }
 
+    // Complete
     setIsVerifying(false)
     setIsVerified(true)
     stopCamera()
 
-    // Complete verification after showing success
     setTimeout(() => {
       onVerificationComplete()
     }, 1500)
@@ -87,7 +125,14 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
 
         <div className="relative bg-muted rounded-lg overflow-hidden aspect-square">
           {stream ? (
-            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              muted 
+              className="w-full h-full object-cover"
+              style={{ transform: 'scaleX(-1)' }}
+            />
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center space-y-4">
@@ -134,6 +179,9 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
             </Button>
           )}
         </div>
+
+        {/* Hidden canvas for image capture */}
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
       </CardContent>
     </Card>
   )
