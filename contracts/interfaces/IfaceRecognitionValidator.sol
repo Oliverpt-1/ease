@@ -7,7 +7,6 @@ import {IValidator} from "lib/erc7579-implementation/src/interfaces/IERC7579Modu
 interface IFaceRecognitionValidator is IValidator {
     struct UserData {
         bytes32 facialHash;
-        bytes encodedEmbedding;
         string username;
         uint256 index;
         bool isRegistered;

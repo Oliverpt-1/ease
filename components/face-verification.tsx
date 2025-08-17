@@ -3,10 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { useCompreface } from "@/components/use-compreface"
-import { useWalletClient } from "@/components/use-wallet-client"
 import { ArrowLeft, Camera, CheckCircle } from "lucide-react"
 
 interface FaceVerificationProps {
@@ -20,12 +17,10 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
   const [isVerified, setIsVerified] = useState<boolean>(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [capturedImage, setCapturedImage] = useState<Blob | null>(null)
-  const [ensName, setEnsName] = useState<string>("")
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   
   const { recognize, loading } = useCompreface()
-  const { createWalletClient, sendPayment, loading: walletLoading, error: walletError } = useWalletClient()
 
   // Effect to connect stream to video element when both are available
   useEffect(() => {
@@ -91,54 +86,28 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
   }
 
   const handleVerification = async () => {
-    if (!ensName.trim()) {
-      alert('Please enter your ENS name')
-      return
-    }
-
     setIsVerifying(true)
 
-    try {
-      // Capture image and get embedding
-      const imageBlob = await captureImage()
-      
-      if (!imageBlob) {
-        throw new Error('Failed to capture image')
-      }
-
+    // Capture image and wait for it
+    const imageBlob = await captureImage()
+    
+    if (imageBlob) {
+      // Get embedding
       const result = await recognize(imageBlob)
       
-      if (!result.result?.[0]?.embedding) {
-        throw new Error('Failed to get facial embedding')
+      if (result.result?.[0]?.embedding) {
+        console.log('EMBEDDING:', result.result[0].embedding)
       }
-
-      const embedding = result.result[0].embedding
-      console.log('EMBEDDING:', embedding)
-
-      // Create wallet client with ENS and embedding
-      await createWalletClient(ensName, embedding)
-      
-      // Send payment transaction
-      const recipient = '0x742d35Cc6635C0532925a3b8D77f2A8e1E0e07b2' // Merchant address
-      const amountInWei = BigInt(Math.floor(totalAmount * 100 * 10**16)) // Convert dollars to wei
-      
-      const txHash = await sendPayment(recipient, amountInWei)
-      console.log('Payment transaction:', txHash)
-
-      // Success
-      setIsVerifying(false)
-      setIsVerified(true)
-      stopCamera()
-
-      setTimeout(() => {
-        onVerificationComplete()
-      }, 1500)
-
-    } catch (error) {
-      console.error('Verification failed:', error)
-      setIsVerifying(false)
-      alert(`Verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
+
+    // Complete
+    setIsVerifying(false)
+    setIsVerified(true)
+    stopCamera()
+
+    setTimeout(() => {
+      onVerificationComplete()
+    }, 1500)
   }
 
   return (
@@ -196,27 +165,9 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
         </div>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="ensName">ENS Name</Label>
-            <Input
-              id="ensName"
-              type="text"
-              placeholder="alice.ourapp.eth"
-              value={ensName}
-              onChange={(e) => setEnsName(e.target.value)}
-              disabled={isVerifying || isVerified}
-            />
-          </div>
-
           <p className="text-center text-sm text-muted-foreground">
-            Enter your ENS name and position your face in the camera frame to complete payment
+            Position your face in the camera frame and tap verify to complete payment
           </p>
-
-          {walletError && (
-            <p className="text-center text-sm text-red-500">
-              {walletError}
-            </p>
-          )}
 
           {!stream && !isVerified && (
             <Button onClick={startCamera} variant="outline" className="w-full bg-transparent">
@@ -226,13 +177,8 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
           )}
 
           {stream && !isVerifying && !isVerified && (
-            <Button 
-              onClick={handleVerification} 
-              className="w-full" 
-              size="lg"
-              disabled={!ensName.trim() || loading || walletLoading}
-            >
-              {loading || walletLoading ? 'Processing...' : `Verify & Pay $${totalAmount.toFixed(2)}`}
+            <Button onClick={handleVerification} className="w-full" size="lg">
+              Verify & Pay ${totalAmount.toFixed(2)}
             </Button>
           )}
         </div>

@@ -6,6 +6,7 @@ import {faceRecognitionValidator} from "../contracts/validators/faceRecognitionV
 import {FRVMWalletFactory} from "../contracts/factories/FRVMWalletFactory.sol";
 import {MerchantAccount} from "../contracts/merchants/MerchantAccount.sol";
 import {CheckoutProcessor} from "../contracts/merchants/CheckoutProcessor.sol";
+import {Bootstrap} from "../lib/erc7579-implementation/src/utils/Bootstrap.sol";
 
 // Concrete implementation of the abstract validator for deployment
 contract FaceRecognitionValidatorImpl is faceRecognitionValidator {
@@ -67,6 +68,10 @@ contract DeployAndRegister is Script {
         // 1. Deploy FRVM Validator
         address frvmValidator = address(new FaceRecognitionValidatorImpl());
         console.log("[OK] FRVMValidator:", frvmValidator);
+        
+        // Deploy Bootstrap contract
+        address payable bootstrapContract = payable(address(new Bootstrap()));
+        console.log("[OK] Bootstrap:", bootstrapContract);
         
         // 2. Deploy FRVM Wallet Factory
         address walletFactory = address(new FRVMWalletFactory(

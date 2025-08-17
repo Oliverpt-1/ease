@@ -6,7 +6,7 @@ import { entryPoint07Address, entryPoint07Abi } from 'viem/account-abstraction'
 import { createPimlicoClient } from 'permissionless/clients/pimlico'
 
 // Constants (replace with actual deployed addresses)
-const KERNEL_FACTORY_ADDRESS = '0x...YourFactoryAddress...' // WalletFactoryAndResolver address
+const KERNEL_FACTORY_ADDRESS = '0x117c9bd5cbbecf0bddb71c79c6fad412754ec272' // WalletFactoryAndResolver address
 const KERNEL_IMPLEMENTATION_ADDRESS = '0x...KernelImplAddress...'
 const FACIAL_VALIDATOR_ADDRESS = '0x...FacialRecognitionValidatorAddress...'
 const ROOT_ENS_NAME = 'ourapp.eth' // Root domain for subdomains

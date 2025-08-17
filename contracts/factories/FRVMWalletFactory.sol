@@ -18,6 +18,12 @@ interface IKernel {
         bytes calldata validatorData,
         bytes calldata hookData
     ) external;
+    
+    function installModule(
+        uint256 moduleType,
+        address module,
+        bytes calldata data
+    ) external;
 }
 
 contract FRVMWalletFactory {
@@ -76,6 +82,11 @@ contract FRVMWalletFactory {
             initData,
             salt
         );
+        
+        // Note: Module installation must be done separately after wallet creation
+        // The validator's onInstall will be called when the module is installed
+        // This can be done through a separate transaction by the wallet owner
+        
         //not encoding the node correctly
         // Compute ENS node for subdomain
         bytes32 rootNode = _namehash("eaze.eth");
