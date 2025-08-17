@@ -5,9 +5,10 @@ import { BillEntry } from "@/components/bill-entry"
 import { TipSelection } from "@/components/tip-selection"
 import { FaceVerification } from "@/components/face-verification"
 import { PaymentConfirmation } from "@/components/payment-confirmation"
+import ChainlinkDemo from "@/components/chainlink-demo"
 import Image from "next/image"
 
-type Step = "bill-entry" | "tip-selection" | "face-verification" | "confirmation"
+type Step = "bill-entry" | "tip-selection" | "face-verification" | "confirmation" | "chainlink-demo"
 
 export default function Home() {
   const [currentStep, setCurrentStep] = useState<Step>("bill-entry")
@@ -90,6 +91,11 @@ export default function Home() {
           />
         )}
 
+      </div>
+
+      {/* Always show Chainlink Demo at the bottom */}
+      <div className="mt-12 border-t pt-8">
+        <ChainlinkDemo />
       </div>
     </main>
   )

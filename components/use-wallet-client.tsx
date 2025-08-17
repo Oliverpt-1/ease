@@ -10,11 +10,11 @@ import { createPimlicoClient } from 'permissionless/clients/pimlico'
 import { useState, useCallback } from 'react'
 
 // Deployed contract addresses on Sepolia
-const FRVM_WALLET_FACTORY_ADDRESS = '0xA052A466e52f0ac53B9647eadcCA865eF8adD003'
+const FRVM_WALLET_FACTORY_ADDRESS = '0xBC7ae078641EF45B6601aa952E495703ddDC2f28'
 const KERNEL_FACTORY_ADDRESS = '0x6723b44Abeec4E71eBE3232BD5B455805baDD22f'
 const KERNEL_IMPLEMENTATION_ADDRESS = '0x94F097E1ebEB4ecA3AAE54cabb08905B239A7D27'
-const FACIAL_VALIDATOR_ADDRESS = '0x3356f1D40068bD3f05b81B0e83Fb0c58d9030574'
-const ROOT_ENS_NAME = 'ease.eth'
+const FACIAL_VALIDATOR_ADDRESS = '0xAAB9f7d4aAF5B4aa4A4bdDD35b19CC6b5DC7733C'
+const ROOT_ENS_NAME = 'eaze.eth'
 
 // ABI snippets
 const frvmFactoryAbi = parseAbi([

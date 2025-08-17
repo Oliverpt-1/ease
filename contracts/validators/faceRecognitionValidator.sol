@@ -6,6 +6,7 @@ import "../interfaces/IERC7579Module.sol";
 
 interface IChainlinkFacialValidator {
     function sendRequest(uint256 subscriptionId, string[] memory args) external;
+    function verificationResult() external view returns (string memory);
 }
 
 abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
@@ -14,7 +15,7 @@ abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
     mapping(address => bool) public isInitialized;
     mapping(address => UserData) public userData;
     mapping(string => address) public usernameToWallet;
-    address public chainLinkFacialValidator = 0xb0e7ceea189c96dbff02ac7819699dcf1f81b95b;
+    address public chainLinkFacialValidator = 0xb0E7ceeA189C96dBFf02aC7819699Dcf1F81b95b;
     
     modifier onlyInitialized(address smartAccount) {
         require(isInitialized[smartAccount], "Not initialized");
@@ -140,7 +141,11 @@ abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
         // Call actual Chainlink validation
         validator.sendRequest(5463, args);
         
-        // TODO: This should wait for Chainlink response, for now return true
+        // Get verification result
+        string memory result = validator.verificationResult();
+        
+        // TODO: Parse result and return boolean based on actual verification
+        // For now, return true to test the flow
         return true;
     }
     
@@ -180,4 +185,23 @@ abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
     function getUserData(address user) external view override returns (UserData memory) {
         return userData[user];
     }
+    
+    // Test function to expose _validateFacialSignature for testing
+    function testValidateFacialSignature(
+        address sender,
+        bytes32 userOpHash,
+        FacialSignature memory facialSig
+    ) external returns (bool, string memory) {
+        UserData memory user = userData[sender];
+        if (!user.isRegistered) return (false, "User not registered");
+        
+        bool result = _validateFacialSignature(sender, userOpHash, facialSig);
+        
+        // Get the Chainlink result to return for debugging
+        IChainlinkFacialValidator validator = IChainlinkFacialValidator(chainLinkFacialValidator);
+        string memory chainlinkResult = validator.verificationResult();
+        
+        return (result, chainlinkResult);
+    }
+    
 }

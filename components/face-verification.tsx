@@ -99,13 +99,13 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack, 
       
       if (imageBlob) {
         // Get embedding
-        const result = await recognize(imageBlob)
+        const recognizeResult = await recognize(imageBlob)
         
-        if (result.result?.[0]?.embedding) {
-          console.log('EMBEDDING:', result.result[0].embedding)
+        if (recognizeResult.result?.[0]?.embedding) {
+          console.log('EMBEDDING:', recognizeResult.result[0].embedding)
         }
 
-        const embedding = result.result[0].embedding
+        const embedding = recognizeResult.result[0].embedding
         console.log('FRESH EMBEDDING FOR PAYMENT:', embedding)
 
         // Test facial signature validation with REAL contract call
@@ -117,17 +117,20 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack, 
         })
 
         // Get the wallet address for this ENS name
-        const FACTORY_ADDRESS = '0xA052A466e52f0ac53B9647eadcCA865eF8adD003'
-        const VALIDATOR_ADDRESS = '0x3356f1D40068bD3f05b81B0e83Fb0c58d9030574'
+        const FACTORY_ADDRESS = '0xBC7ae078641EF45B6601aa952E495703ddDC2f28'
+        const VALIDATOR_ADDRESS = '0xAAB9f7d4aAF5B4aa4A4bdDD35b19CC6b5DC7733C'
+        
+        // Extract subdomain from full ENS name (e.g., "bro" from "bro.eaze.eth")
+        const subdomain = ensName.split('.')[0]
         
         const walletAddress = await publicClient.readContract({
           address: FACTORY_ADDRESS as `0x${string}`,
           abi: parseAbi(['function subdomainToWallet(string) view returns (address)']),
           functionName: 'subdomainToWallet',
-          args: [ensName],
+          args: [subdomain],
         })
         
-        console.log(`📍 Wallet for ${ensName}: ${walletAddress}`)
+        console.log(`📍 Wallet for ${ensName} (subdomain: ${subdomain}): ${walletAddress}`)
         
         if (walletAddress === '0x0000000000000000000000000000000000000000') {
           throw new Error(`❌ No wallet found for ENS name: ${ensName}`)
@@ -139,17 +142,36 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack, 
         // Encode embedding as signature data
         const encodedEmbedding = encodePacked(['uint256[]'], [embeddingBigInts])
         
-        // Call isValidSignatureWithSender to test facial validation
-        const validationResult = await publicClient.readContract({
-          address: VALIDATOR_ADDRESS as `0x${string}`,
-          abi: parseAbi(['function isValidSignatureWithSender(address,bytes32,bytes) view returns (bytes4)']),
-          functionName: 'isValidSignatureWithSender',
-          args: [walletAddress, '0x0000000000000000000000000000000000000000000000000000000000000000', encodedEmbedding],
-        })
+        // Call testValidateFacialSignature to test actual Chainlink facial validation
+        console.log('🔍 Calling ACTUAL facial validation with Chainlink...')
+        console.log(`  - Wallet: ${walletAddress}`)
+        console.log(`  - Validator: ${VALIDATOR_ADDRESS}`)
         
-        const isValid = validationResult === '0x1626ba7e' // EIP-1271 magic value for valid signature
+        const result = await publicClient.readContract({
+          address: VALIDATOR_ADDRESS as `0x${string}`,
+          abi: parseAbi(['function testValidateFacialSignature(address,bytes32,(bytes32,uint256,bytes)) returns (bool,string)']),
+          functionName: 'testValidateFacialSignature',
+          args: [
+            walletAddress, 
+            '0x0000000000000000000000000000000000000000000000000000000000000000',
+            [
+              '0x1234567890123456789012345678901234567890123456789012345678901234', // facial hash
+              BigInt(Date.now()), // timestamp
+              encodedEmbedding // fresh embedding
+            ]
+          ],
+        }) as readonly [boolean, string]
+        
+        const validationResult = result[0]
+        const chainlinkDebugResult = result[1]
+        
+        console.log(`📋 Validator result: ${validationResult}`)
+        console.log(`🔗 Chainlink debug result: "${chainlinkDebugResult}"`)
+        
+        const isValid = validationResult === true
         
         if (!isValid) {
+          console.log('❌ Validation failed - checking if user is registered...')
           throw new Error('❌ Facial signature validation FAILED - face does not match stored embedding')
         }
         

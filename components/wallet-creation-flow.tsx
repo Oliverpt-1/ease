@@ -199,7 +199,7 @@ export function WalletCreationFlow() {
                   disabled={isProcessing}
                 />
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
-                  .ease.eth
+                  .eaze.eth
                 </div>
               </div>
             </div>
