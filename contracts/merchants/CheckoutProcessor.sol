@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import "../interfaces/IfaceRecognitionValidator.sol";
-import "../ens/UsernameRegistry.sol";
+import "../factories/FRVMWalletFactory.sol";
 import "./MerchantAccount.sol";
 
 contract CheckoutProcessor {
@@ -24,7 +24,7 @@ contract CheckoutProcessor {
     mapping(address => bytes32[]) public customerSessions;
 
     IFaceRecognitionValidator public immutable frvmValidator;
-    UsernameRegistry public immutable usernameRegistry;
+    FRVMWalletFactory public immutable walletFactory;
     MerchantAccount public immutable merchantAccount;
 
     event CheckoutSessionCreated(
@@ -44,11 +44,11 @@ contract CheckoutProcessor {
 
     constructor(
         address _frvmValidator,
-        address _usernameRegistry,
+        address _walletFactory,
         address _merchantAccount
     ) {
         frvmValidator = IFaceRecognitionValidator(_frvmValidator);
-        usernameRegistry = UsernameRegistry(_usernameRegistry);
+        walletFactory = FRVMWalletFactory(_walletFactory);
         merchantAccount = MerchantAccount(_merchantAccount);
     }
 
@@ -59,7 +59,7 @@ contract CheckoutProcessor {
         uint256 expiryDuration,
         bytes calldata metadata
     ) external returns (bytes32 sessionId) {
-        address customer = usernameRegistry.resolveUsername(customerUsername);
+        address customer = walletFactory.resolveUsername(customerUsername);
         require(customer != address(0), "Customer not found");
 
         sessionId = keccak256(abi.encodePacked(
@@ -100,7 +100,7 @@ contract CheckoutProcessor {
         if (session.isCompleted) revert SessionAlreadyCompleted();
         if (block.timestamp > session.expiryTimestamp) revert SessionExpired();
 
-        address customer = usernameRegistry.resolveUsername(session.customerUsername);
+        address customer = walletFactory.resolveUsername(session.customerUsername);
         if (customer != msg.sender) revert InvalidCustomer();
 
         bytes32 checkoutHash = keccak256(abi.encodePacked(
@@ -138,7 +138,7 @@ contract CheckoutProcessor {
         if (session.merchant == address(0)) revert SessionNotFound();
         if (session.isCompleted) revert SessionAlreadyCompleted();
 
-        address customer = usernameRegistry.resolveUsername(session.customerUsername);
+        address customer = walletFactory.resolveUsername(session.customerUsername);
         
         require(
             msg.sender == session.merchant || 

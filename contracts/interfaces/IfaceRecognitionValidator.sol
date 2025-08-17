@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "@erc7579/src/interfaces/IERC7579Module.sol";
+import "./IERC7579Module.sol";
+import {IValidator} from "lib/erc7579-implementation/src/interfaces/IERC7579Module.sol";
 
 interface IFaceRecognitionValidator is IValidator {
     struct UserData {
@@ -21,7 +22,6 @@ interface IFaceRecognitionValidator is IValidator {
 
     event UserRegistered(address indexed wallet, string username, bytes32 facialHash);
     event FacialHashUpdated(address indexed wallet, bytes32 oldHash, bytes32 newHash);
-    event CrossChainSync(address indexed wallet, uint16 chainId, bytes32 facialHash);
     event ValidationSuccessful(address indexed wallet, bytes32 messageHash);
     event ValidationFailed(address indexed wallet, bytes32 messageHash, string reason);
 
@@ -30,7 +30,6 @@ interface IFaceRecognitionValidator is IValidator {
     error UsernameAlreadyTaken();
     error InvalidSignature();
     error FacialHashMismatch();
-    error CrossChainSyncFailed();
 
     function registerUser(
         string calldata username,
@@ -51,6 +50,4 @@ interface IFaceRecognitionValidator is IValidator {
     function getUserByUsername(string calldata username) external view returns (address);
 
     function generateWalletSalt(bytes32 facialHash, uint256 index) external pure returns (bytes32);
-
-    function syncToChain(uint16 chainId, address user) external payable;
 }
