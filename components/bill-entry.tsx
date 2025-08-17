@@ -4,11 +4,11 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, Camera } from "lucide-react"
+import { DollarSign, Camera, User } from "lucide-react"
 
 interface BillEntryProps {
   onSubmit: (amount: number) => void
-  onPayment: (billAmount: number, tipAmount: number, totalAmount: number) => void
+  onPayment: (billAmount: number, tipAmount: number, totalAmount: number, ensName: string) => void
 }
 
 export function BillEntry({ onSubmit, onPayment }: BillEntryProps) {
@@ -16,6 +16,7 @@ export function BillEntry({ onSubmit, onPayment }: BillEntryProps) {
   const [error, setError] = useState<string>("")
   const [selectedTip, setSelectedTip] = useState<number | null>(null)
   const [customTip, setCustomTip] = useState<string>("")
+  const [ensName, setEnsName] = useState<string>("")
 
   const billAmount = Number.parseFloat(amount) || 0
   const tipPercentages = [10, 15, 20]
@@ -46,9 +47,14 @@ export function BillEntry({ onSubmit, onPayment }: BillEntryProps) {
       return
     }
 
+    if (!ensName.trim()) {
+      setError("Please enter your ENS name")
+      return
+    }
+
     setError("")
     const tipAmount = getTipAmount()
-    onPayment(billAmount, tipAmount, totalAmount)
+    onPayment(billAmount, tipAmount, totalAmount, ensName)
   }
 
   return (
@@ -126,6 +132,22 @@ export function BillEntry({ onSubmit, onPayment }: BillEntryProps) {
             </div>
           </div>
 
+          {/* ENS Name Input */}
+          <div className="space-y-2">
+            <h3 className="text-lg font-semibold text-center">Your ENS Name</h3>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Enter your ENS name (e.g., john)"
+                value={ensName}
+                onChange={(e) => setEnsName(e.target.value)}
+                className="pl-10 text-center"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground text-center">This will identify your wallet (e.g., john.eaze.eth)</p>
+          </div>
+
           <div className="text-center p-4 bg-primary/10 rounded-lg border-2 border-primary/20">
             <div className="space-y-1">
               <div className="flex justify-between text-sm">
@@ -147,7 +169,7 @@ export function BillEntry({ onSubmit, onPayment }: BillEntryProps) {
 
           <Button
             onClick={handlePayment}
-            disabled={billAmount <= 0 || selectedTip === null}
+            disabled={billAmount <= 0 || selectedTip === null || !ensName.trim()}
             className="w-full"
             size="lg"
           >

@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useCompreface } from "@/components/use-compreface"
 import { useWalletClient } from "@/components/use-wallet-client"
 import { ArrowLeft, Camera, CheckCircle } from "lucide-react"
+import { createPublicClient, http, parseAbi, encodePacked } from 'viem'
+import { sepolia } from 'viem/chains'
 
 interface FaceVerificationProps {
   totalAmount: number
@@ -106,6 +108,56 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack, 
         const embedding = result.result[0].embedding
         console.log('FRESH EMBEDDING FOR PAYMENT:', embedding)
 
+        // Test facial signature validation with REAL contract call
+        console.log('🔍 Testing ACTUAL facial signature validation...')
+        
+        const publicClient = createPublicClient({
+          chain: sepolia,
+          transport: http('https://eth-sepolia.g.alchemy.com/v2/TAna5TyVIgrgtMUxfEYgF'),
+        })
+
+        // Get the wallet address for this ENS name
+        const FACTORY_ADDRESS = '0xA052A466e52f0ac53B9647eadcCA865eF8adD003'
+        const VALIDATOR_ADDRESS = '0x3356f1D40068bD3f05b81B0e83Fb0c58d9030574'
+        
+        const walletAddress = await publicClient.readContract({
+          address: FACTORY_ADDRESS as `0x${string}`,
+          abi: parseAbi(['function subdomainToWallet(string) view returns (address)']),
+          functionName: 'subdomainToWallet',
+          args: [ensName],
+        })
+        
+        console.log(`📍 Wallet for ${ensName}: ${walletAddress}`)
+        
+        if (walletAddress === '0x0000000000000000000000000000000000000000') {
+          throw new Error(`❌ No wallet found for ENS name: ${ensName}`)
+        }
+
+        // Convert fresh embedding to contract format (shift to positive range)
+        const embeddingBigInts = embedding.map(n => BigInt(Math.floor((n + 1) * 1000000)))
+        
+        // Encode embedding as signature data
+        const encodedEmbedding = encodePacked(['uint256[]'], [embeddingBigInts])
+        
+        // Call isValidSignatureWithSender to test facial validation
+        const validationResult = await publicClient.readContract({
+          address: VALIDATOR_ADDRESS as `0x${string}`,
+          abi: parseAbi(['function isValidSignatureWithSender(address,bytes32,bytes) view returns (bytes4)']),
+          functionName: 'isValidSignatureWithSender',
+          args: [walletAddress, '0x0000000000000000000000000000000000000000000000000000000000000000', encodedEmbedding],
+        })
+        
+        const isValid = validationResult === '0x1626ba7e' // EIP-1271 magic value for valid signature
+        
+        if (!isValid) {
+          throw new Error('❌ Facial signature validation FAILED - face does not match stored embedding')
+        }
+        
+        console.log('✅ Facial signature validation PASSED!')
+        console.log(`🎯 Contract returned: ${validationResult}`)
+        console.log(`🧬 Embedding length: ${embedding.length} dimensions`)
+        console.log(`📊 Wallet: ${walletAddress}`)
+
         // Create wallet client with ENS and fresh embedding
         await createWalletClient(ensName, embedding)
         
@@ -114,7 +166,7 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack, 
         const amountInWei = BigInt(Math.floor(totalAmount * 100 * 10**16)) // Convert dollars to wei
         
         const txHash = await sendPayment(recipient, amountInWei)
-        console.log('Payment transaction:', txHash)
+        console.log('💰 Payment transaction:', txHash)
 
         // Success
         setIsVerifying(false)

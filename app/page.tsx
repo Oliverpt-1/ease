@@ -14,6 +14,7 @@ export default function Home() {
   const [billAmount, setBillAmount] = useState<number>(0)
   const [tipPercentage, setTipPercentage] = useState<number>(15)
   const [isVerified, setIsVerified] = useState<boolean>(false)
+  const [ensName, setEnsName] = useState<string>("")
 
   const tipAmount = (billAmount * tipPercentage) / 100
   const totalAmount = billAmount + tipAmount
@@ -23,8 +24,9 @@ export default function Home() {
     setCurrentStep("tip-selection")
   }
 
-  const handleTipSubmit = (percentage: number) => {
+  const handleTipSubmit = (percentage: number, ensName: string) => {
     setTipPercentage(percentage)
+    setEnsName(ensName)
     setCurrentStep("face-verification")
   }
 
@@ -37,12 +39,14 @@ export default function Home() {
     setBillAmount(0)
     setTipPercentage(15)
     setIsVerified(false)
+    setEnsName("")
     setCurrentStep("bill-entry")
   }
 
-  const handlePayment = (billAmount: number, tipAmount: number, totalAmount: number) => {
+  const handlePayment = (billAmount: number, tipAmount: number, totalAmount: number, ensName: string) => {
     setBillAmount(billAmount)
-    setCurrentStep("face-verification")
+    setEnsName(ensName)
+    setCurrentStep("face-verification") // Skip the redundant tip selection page
   }
 
   return (
@@ -73,7 +77,7 @@ export default function Home() {
             totalAmount={totalAmount}
             onVerificationComplete={handleVerificationComplete}
             onBack={() => setCurrentStep("tip-selection")}
-            ensName="testuser"
+            ensName={ensName}
           />
         )}
 

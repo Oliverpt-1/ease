@@ -14,7 +14,7 @@ abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
     mapping(address => bool) public isInitialized;
     mapping(address => UserData) public userData;
     mapping(string => address) public usernameToWallet;
-    address public chainLinkFacialValidator;
+    address public chainLinkFacialValidator = 0xb0e7ceea189c96dbff02ac7819699dcf1f81b95b;
     
     modifier onlyInitialized(address smartAccount) {
         require(isInitialized[smartAccount], "Not initialized");
@@ -137,15 +137,43 @@ abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
         args[0] = _arrayToString(storedEmbedding);
         args[1] = _arrayToString(frontendEmbedding);
         
-        // TODO: Replace with actual Chainlink validation when ready
-        // validator.sendRequest(5463, args);
+        // Call actual Chainlink validation
+        validator.sendRequest(5463, args);
         
-        // For now, always return true to test payment flow
+        // TODO: This should wait for Chainlink response, for now return true
         return true;
     }
     
     function _arrayToString(uint256[] memory arr) internal pure returns (string memory) {
-        return "[1,2,3]";
+        if (arr.length == 0) return "[]";
+        
+        bytes memory result = abi.encodePacked("[");
+        for (uint256 i = 0; i < arr.length; i++) {
+            if (i > 0) {
+                result = abi.encodePacked(result, ",");
+            }
+            result = abi.encodePacked(result, _toString(arr[i]));
+        }
+        result = abi.encodePacked(result, "]");
+        return string(result);
+    }
+    
+    function _toString(uint256 value) internal pure returns (string memory) {
+        if (value == 0) return "0";
+        
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) {
+            digits++;
+            temp /= 10;
+        }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits -= 1;
+            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
     }
 
 

@@ -4,19 +4,20 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, Percent } from "lucide-react"
+import { ArrowLeft, Percent, User } from "lucide-react"
 
 interface TipSelectionProps {
   billAmount: number
   currentTip: number
   onTipChange: (percentage: number) => void
-  onSubmit: (percentage: number) => void
+  onSubmit: (percentage: number, ensName: string) => void
   onBack: () => void
 }
 
 export function TipSelection({ billAmount, currentTip, onTipChange, onSubmit, onBack }: TipSelectionProps) {
   const [customTip, setCustomTip] = useState<string>("")
   const [isCustom, setIsCustom] = useState<boolean>(false)
+  const [ensName, setEnsName] = useState<string>("")
 
   const presetTips = [10, 15, 20]
   const tipAmount = (billAmount * currentTip) / 100
@@ -38,7 +39,11 @@ export function TipSelection({ billAmount, currentTip, onTipChange, onSubmit, on
   }
 
   const handleSubmit = () => {
-    onSubmit(currentTip)
+    if (!ensName.trim()) {
+      alert("Please enter your ENS name")
+      return
+    }
+    onSubmit(currentTip, ensName)
   }
 
   return (
@@ -83,6 +88,21 @@ export function TipSelection({ billAmount, currentTip, onTipChange, onSubmit, on
             />
             <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Your ENS Name</label>
+          <div className="relative">
+            <Input
+              type="text"
+              placeholder="Enter your ENS name (e.g., john)"
+              value={ensName}
+              onChange={(e) => setEnsName(e.target.value)}
+              className="pr-10"
+            />
+            <User className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          </div>
+          <p className="text-xs text-muted-foreground">This will be your wallet identifier (e.g., john.eaze.eth)</p>
         </div>
 
         <div className="bg-secondary/50 p-4 rounded-lg space-y-2">
