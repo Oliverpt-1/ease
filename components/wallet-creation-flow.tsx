@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useCompreface } from "@/components/use-compreface"
+import { useWalletClient } from "@/components/use-wallet-client"
 import { toast } from "sonner"
 import { Wallet, Camera, CheckCircle, Copy, QrCode, User } from "lucide-react"
 
@@ -85,7 +86,8 @@ export function WalletCreationFlow() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   
-  const { recognize, loading } = useCompreface()
+  const { recognize, loading: comprefaceLoading } = useCompreface()
+  const { deployWallet, loading: walletLoading } = useWalletClient()
 
   // Effect to connect stream to video element when both are available
   useEffect(() => {
@@ -132,24 +134,31 @@ export function WalletCreationFlow() {
       
       const embedding = await captureImageAndGetEmbedding(videoRef, canvasRef, recognize)
       
-      setState(prev => ({ 
-        ...prev,
-        status: 'completed'
-      }))
+      setState(prev => ({ ...prev, status: 'deploying' }))
+      toast.info("Deploying wallet with biometric data...")
       
       console.log('EMBEDDING:', embedding)
       
+      const result = await deployWallet(state.ensName, embedding)
+      
+      setState(prev => ({ 
+        ...prev,
+        status: 'completed',
+        account: result.address,
+        transactionHash: result.transactionHash
+      }))
+      
       stopCamera()
-      toast.success("Biometrics processed successfully!")
+      toast.success("Wallet created successfully!")
       
     } catch (error) {
-      console.error("Processing failed:", error)
+      console.error("Wallet creation failed:", error)
       setState(prev => ({ 
         ...prev,
         status: 'idle', 
         error: error instanceof Error ? error.message : 'Unknown error' 
       }))
-      toast.error("Biometric processing failed")
+      toast.error(`Wallet creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
       stopCamera()
     }
   }
@@ -161,7 +170,7 @@ export function WalletCreationFlow() {
     }
   }
 
-  const isProcessing = ['capturing', 'processing', 'deploying', 'broadcasting'].includes(state.status)
+  const isProcessing = ['capturing', 'processing', 'deploying', 'broadcasting'].includes(state.status) || comprefaceLoading || walletLoading
 
   return (
     <Card className="w-full">

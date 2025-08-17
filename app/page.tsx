@@ -73,6 +73,7 @@ export default function Home() {
             totalAmount={totalAmount}
             onVerificationComplete={handleVerificationComplete}
             onBack={() => setCurrentStep("tip-selection")}
+            ensName="testuser"
           />
         )}
 

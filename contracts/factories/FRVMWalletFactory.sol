@@ -57,7 +57,8 @@ contract FRVMWalletFactory {
 
     function createWallet(
         string calldata username,
-        bytes32 facialHash
+        bytes32 facialHash,
+        uint256[] calldata facialEmbedding
     ) external returns (address wallet) {
         require(subdomainToWallet[username] == address(0), "Username already taken");
         require(facialHash != bytes32(0), "Invalid facial hash");
@@ -73,7 +74,7 @@ contract FRVMWalletFactory {
             IKernel.initialize.selector,
             validationId,                    // _rootValidator as ValidationId
             address(0),                       // hook (none)
-            abi.encode(facialHash),          // validatorData with facial hash
+            abi.encode(facialHash, facialEmbedding), // validatorData with facial hash and embedding
             ""                               // hookData (empty)
         );
         

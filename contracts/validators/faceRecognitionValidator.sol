@@ -4,10 +4,16 @@ pragma solidity ^0.8.28;
 import "../interfaces/IfaceRecognitionValidator.sol";
 import "../interfaces/IERC7579Module.sol";
 
+interface IChainlinkFacialValidator {
+    function sendRequest(uint256 subscriptionId, string[] memory args) external;
+}
+
 abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
     
     mapping(address => bytes32) public userFacialHash;
     mapping(address => bool) public isInitialized;
+    mapping(address => UserData) public userData;
+    mapping(string => address) public usernameToWallet;
     address public chainLinkFacialValidator;
     
     modifier onlyInitialized(address smartAccount) {
@@ -20,10 +26,18 @@ abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
     function onInstall(bytes calldata data) external override {
         require(!isInitialized[msg.sender], "Already initialized");
         
-        bytes32 facialHash = abi.decode(data, (bytes32));
+        (bytes32 facialHash, uint256[] memory facialEmbedding) = abi.decode(data, (bytes32, uint256[]));
         require(facialHash != bytes32(0), "Invalid facial hash");
         
         userFacialHash[msg.sender] = facialHash;
+        userData[msg.sender] = UserData({
+            facialHash: facialHash,
+            encodedEmbedding: abi.encode(facialEmbedding),
+            username: "",
+            index: 0,
+            isRegistered: true,
+            registrationTimestamp: block.timestamp
+        });
         isInitialized[msg.sender] = true;
         
         emit UserRegistered(msg.sender, "", facialHash);
@@ -44,7 +58,7 @@ abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
         string calldata username,
         bytes32 facialHash,
         uint256 index
-    ) external override {
+    ) external virtual override {
         uint256[] memory emptyEmbedding = new uint256[](0);
         _registerUser(msg.sender, username, facialHash, emptyEmbedding, index);
     }
@@ -73,7 +87,7 @@ abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
         emit UserRegistered(wallet, username, facialHash);
     }
 
-    function updateFacialHash(bytes32 newFacialHash) external override {
+    function updateFacialHash(bytes32 newFacialHash) external virtual override {
         if (!userData[msg.sender].isRegistered) revert UserNotRegistered();
         if (newFacialHash == bytes32(0)) revert InvalidFacialHash();
         
@@ -136,12 +150,6 @@ abstract contract faceRecognitionValidator is IFaceRecognitionValidator {
 
 
     function getUserData(address user) external view override returns (UserData memory) {
-        return UserData({
-            facialHash: userFacialHash[user],
-            username: "",
-            index: 0,
-            isRegistered: isInitialized[user],
-            registrationTimestamp: 0
-        });
+        return userData[user];
     }
 }

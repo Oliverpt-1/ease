@@ -4,15 +4,17 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useCompreface } from "@/components/use-compreface"
+import { useWalletClient } from "@/components/use-wallet-client"
 import { ArrowLeft, Camera, CheckCircle } from "lucide-react"
 
 interface FaceVerificationProps {
   totalAmount: number
   onVerificationComplete: () => void
   onBack: () => void
+  ensName: string
 }
 
-export function FaceVerification({ totalAmount, onVerificationComplete, onBack }: FaceVerificationProps) {
+export function FaceVerification({ totalAmount, onVerificationComplete, onBack, ensName }: FaceVerificationProps) {
   const [isVerifying, setIsVerifying] = useState<boolean>(false)
   const [isVerified, setIsVerified] = useState<boolean>(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -21,6 +23,7 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
   const canvasRef = useRef<HTMLCanvasElement>(null)
   
   const { recognize, loading } = useCompreface()
+  const { createWalletClient, sendPayment } = useWalletClient()
 
   // Effect to connect stream to video element when both are available
   useEffect(() => {
@@ -88,56 +91,45 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
   const handleVerification = async () => {
     setIsVerifying(true)
 
-    // Capture image and wait for it
-    const imageBlob = await captureImage()
-    
-    if (imageBlob) {
-      // Get embedding
-      const result = await recognize(imageBlob)
+    try {
+      // Capture image and wait for it
+      const imageBlob = await captureImage()
       
-      if (result.result?.[0]?.embedding) {
-        console.log('EMBEDDING:', result.result[0].embedding)
+      if (imageBlob) {
+        // Get embedding
+        const result = await recognize(imageBlob)
+        
+        if (result.result?.[0]?.embedding) {
+          console.log('EMBEDDING:', result.result[0].embedding)
+        }
+
+        const embedding = result.result[0].embedding
+        console.log('FRESH EMBEDDING FOR PAYMENT:', embedding)
+
+        // Create wallet client with ENS and fresh embedding
+        await createWalletClient(ensName, embedding)
+        
+        // Send payment transaction
+        const recipient = '0x742d35Cc6635C0532925a3b8D77f2A8e1E0e07b2' // Merchant address
+        const amountInWei = BigInt(Math.floor(totalAmount * 100 * 10**16)) // Convert dollars to wei
+        
+        const txHash = await sendPayment(recipient, amountInWei)
+        console.log('Payment transaction:', txHash)
+
+        // Success
+        setIsVerifying(false)
+        setIsVerified(true)
+        stopCamera()
+
+        setTimeout(() => {
+          onVerificationComplete()
+        }, 1500)
       }
-<<<<<<< Updated upstream
-=======
-
-      const embedding = result.result[0].embedding
-      console.log('FRESH EMBEDDING FOR PAYMENT:', embedding)
-
-      // Create wallet client with ENS and fresh embedding
-      await createWalletClient(ensName, embedding)
-      
-      // Send payment transaction
-      const recipient = '0x742d35Cc6635C0532925a3b8D77f2A8e1E0e07b2' // Merchant address
-      const amountInWei = BigInt(Math.floor(totalAmount * 100 * 10**16)) // Convert dollars to wei
-      
-      const txHash = await sendPayment(recipient, amountInWei)
-      console.log('Payment transaction:', txHash)
-
-      // Success
-      setIsVerifying(false)
-      setIsVerified(true)
-      stopCamera()
-
-      setTimeout(() => {
-        onVerificationComplete()
-      }, 1500)
-
     } catch (error) {
       console.error('Verification failed:', error)
       setIsVerifying(false)
       alert(`Verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
->>>>>>> Stashed changes
     }
-
-    // Complete
-    setIsVerifying(false)
-    setIsVerified(true)
-    stopCamera()
-
-    setTimeout(() => {
-      onVerificationComplete()
-    }, 1500)
   }
 
   return (
