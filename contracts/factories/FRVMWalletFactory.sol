@@ -43,14 +43,16 @@ contract FRVMWalletFactory {
 
     function createWallet(
         string calldata username,
-        bytes32 facialHash,
+        uint256[] calldata facialEmbedding,
         uint256 index
     ) external returns (address wallet) {
+        bytes32 facialHash = keccak256(abi.encode(facialEmbedding));
         bytes32 salt = frvmValidator.generateWalletSalt(facialHash, index);
-        
+
+
         require(deployedWallets[salt] == address(0), "Wallet already exists");
 
-        bytes memory initData = abi.encode(username, facialHash, index);
+        bytes memory initData = abi.encode(username, facialHash, facialEmbedding, index);
         
         wallet = kernelFactory.createAccount(
             kernelImplementation,

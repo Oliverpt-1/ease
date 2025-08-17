@@ -6,12 +6,17 @@ import "../interfaces/ILayerZeroEndpoint.sol";
 import "../libraries/FacialHashLib.sol";
 import "../interfaces/IERC7579Module.sol";
 
+interface IChainlinkFacialValidator {
+    function sendRequest(uint64 subscriptionId, string[] calldata args) external returns (bytes32);
+    function verificationResult() external view returns (string memory);
+}
+
 contract FacialRecognitionValidator is IFaceRecognitionValidator, ILayerZeroReceiver {
     
     mapping(address => UserData) public userData;
     mapping(string => address) public usernameToWallet;
     mapping(address => bool) public isInitialized;
-    
+    address public chainLinkFacialValidator;
     ILayerZeroEndpoint public immutable lzEndpoint;
     mapping(uint16 => bytes) public trustedRemoteLookup;
     
@@ -32,12 +37,12 @@ contract FacialRecognitionValidator is IFaceRecognitionValidator, ILayerZeroRece
     function onInstall(bytes calldata data) external override {
         if (isInitialized[msg.sender]) revert AlreadyInitialized(msg.sender);
         
-        (string memory username, bytes32 facialHash, uint256 index) = abi.decode(
+        (string memory username, bytes32 facialHash, uint256[] memory facialEmbedding, uint256 index) = abi.decode(
             data, 
-            (string, bytes32, uint256)
+            (string, bytes32, uint256[], uint256)
         );
         
-        _registerUser(msg.sender, username, facialHash, index);
+        _registerUser(msg.sender, username, facialHash, facialEmbedding, index);
         isInitialized[msg.sender] = true;
     }
 
@@ -66,6 +71,7 @@ contract FacialRecognitionValidator is IFaceRecognitionValidator, ILayerZeroRece
         address wallet,
         string memory username,
         bytes32 facialHash,
+        uint256[] memory facialEmbedding,
         uint256 index
     ) internal {
         if (facialHash == bytes32(0)) revert InvalidFacialHash();
@@ -73,6 +79,7 @@ contract FacialRecognitionValidator is IFaceRecognitionValidator, ILayerZeroRece
         
         userData[wallet] = UserData({
             facialHash: facialHash,
+            encodedEmbedding: abi.encode(facialEmbedding),
             username: username,
             index: index,
             isRegistered: true,
@@ -100,7 +107,11 @@ contract FacialRecognitionValidator is IFaceRecognitionValidator, ILayerZeroRece
     ) external view override returns (uint256 validationData) {
         FacialSignature memory facialSig = abi.decode(userOp.signature, (FacialSignature));
         
+        
         bool isValid = _validateFacialSignature(userOp.sender, userOpHash, facialSig);
+
+        //Face 
+        
         
         return isValid ? 0 : 1;
     }
@@ -111,45 +122,36 @@ contract FacialRecognitionValidator is IFaceRecognitionValidator, ILayerZeroRece
         bytes calldata signature
     ) external view returns (bytes4) {
         FacialSignature memory facialSig = abi.decode(signature, (FacialSignature));
-        
+
         bool isValid = _validateFacialSignature(sender, hash, facialSig);
         
         return isValid ? bytes4(0x1626ba7e) : bytes4(0xffffffff);
-    }
-
-    function isValidSignatureWithSender(
-        address sender,
-        bytes32 hash,
-        bytes calldata signature
-    ) external view override returns (bytes4) {
-        FacialSignature memory facialSig = abi.decode(signature, (FacialSignature));
-        
-        bool isValid = _validateFacialSignature(sender, hash, facialSig);
-        
-        return isValid ? bytes4(0x1626ba7e) : bytes4(0xffffffff);
-    }
-
-    function validateFacialSignature(
-        address user,
-        bytes32 messageHash,
-        FacialSignature calldata facialSig
-    ) external view override returns (bool) {
-        return _validateFacialSignature(user, messageHash, facialSig);
     }
 
     function _validateFacialSignature(
-        address user,
-        bytes32 messageHash,
+        address sender,
+        bytes32 userOpHash,
         FacialSignature memory facialSig
     ) internal view returns (bool) {
-        if (!userData[user].isRegistered) return false;
-        if (facialSig.facialHash != userData[user].facialHash) return false;
+        UserData memory user = userData[sender];
+        if (!user.isRegistered) return false;
         
-        return _verifyFacialSignatureInternal(
-            messageHash,
-            facialSig.facialHash,
-            facialSig.signature
-        );
+        uint256[] memory storedEmbedding = abi.decode(user.encodedEmbedding, (uint256[]));
+        uint256[] memory frontendEmbedding = abi.decode(facialSig.signature(uint256[]));
+        
+        IChainlinkFacialValidator validator = IChainlinkFacialValidator(chainLinkFacialValidator);
+        
+        string[] memory args = new string[](2);
+        args[0] = storedEmbedding;
+        args[1] = frontendEmbedding;
+        
+        validator.sendRequest(5463, args);
+        
+        return true;
+    }
+    
+    function _arrayToString(uint256[] memory arr) internal pure returns (string memory) {
+        return "[1,2,3]";
     }
 
     function getUserData(address user) external view override returns (UserData memory) {
@@ -209,45 +211,6 @@ contract FacialRecognitionValidator is IFaceRecognitionValidator, ILayerZeroRece
     function _computeWalletAddress(bytes32 facialHash, uint256 index) internal pure returns (address) {
         bytes32 salt = keccak256(abi.encodePacked(facialHash, index));
         return address(uint160(uint256(salt)));
-    }
-
-    function _verifyFacialSignatureInternal(
-        bytes32 messageHash,
-        bytes32 expectedFacialHash,
-        bytes memory signature
-    ) internal view returns (bool) {
-        if (signature.length < 96) {
-            return false;
-        }
-
-        bytes32 recoveredHash;
-        uint256 timestampValue;
-        
-        assembly {
-            recoveredHash := mload(add(signature, 32))
-            timestampValue := mload(add(signature, 64))
-        }
-
-        if (recoveredHash != expectedFacialHash) {
-            return false;
-        }
-
-        if (timestampValue > block.timestamp + 300 || timestampValue + 300 < block.timestamp) { // 5 minute validity window
-            return false;
-        }
-
-        bytes memory facialProof = new bytes(signature.length - 64);
-        for (uint256 i = 64; i < signature.length; i++) {
-            facialProof[i - 64] = signature[i];
-        }
-
-        bytes32 proofHash = keccak256(abi.encodePacked(
-            messageHash,
-            recoveredHash,
-            timestampValue
-        ));
-
-        return keccak256(facialProof) == proofHash;
     }
 
     function setTrustedRemote(uint16 _chainId, bytes calldata _path) external {
