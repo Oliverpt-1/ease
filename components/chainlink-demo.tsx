@@ -117,32 +117,24 @@ const ChainlinkDemo = () => {
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6">🔗 Chainlink Facial Verification Demo</h2>
+      <h2 className="text-2xl font-bold mb-6">Chainlink Facial Verification Demo</h2>
       
       <div className="space-y-4 mb-6">
-        <div className="p-4 bg-blue-50 rounded-lg">
-          <h3 className="font-semibold text-blue-800">Test Overview</h3>
-          <p className="text-blue-700">
+        <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+          <h3 className="font-semibold text-green-800">Test Overview</h3>
+          <p className="text-green-700">
             This demo directly calls the Chainlink facial verification contract with hardcoded embeddings 
             to prove the CompreFace API integration works.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex justify-center">
           <button
             onClick={testSameFace}
             disabled={isLoading}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            className="px-8 py-4 bg-blue-100 text-blue-800 border border-blue-300 rounded-lg hover:bg-blue-200 disabled:opacity-50 transition-colors"
           >
-            {isLoading ? '⏳ Testing...' : '✅ Test Same Face (Should Match)'}
-          </button>
-
-          <button
-            onClick={testDifferentFace}
-            disabled={isLoading}
-            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-          >
-            {isLoading ? '⏳ Testing...' : '❌ Test Different Face (Should Not Match)'}
+            {isLoading ? 'Testing...' : 'Test Facial Verification'}
           </button>
         </div>
       </div>
@@ -155,15 +147,15 @@ const ChainlinkDemo = () => {
       )}
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-          <h3 className="font-semibold text-red-800">Error</h3>
-          <p className="text-red-700">{error}</p>
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <h3 className="font-semibold text-green-800">Error</h3>
+          <p className="text-green-700">{error}</p>
         </div>
       )}
 
-      <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm">
-        <h3 className="font-semibold text-gray-800">Technical Details</h3>
-        <ul className="text-gray-600 mt-2 space-y-1">
+      <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg text-sm">
+        <h3 className="font-semibold text-green-800">Technical Details</h3>
+        <ul className="text-green-700 mt-2 space-y-1">
           <li>• Chainlink Contract: {CHAINLINK_CONTRACT}</li>
           <li>• Subscription ID: {SUBSCRIPTION_ID}</li>
           <li>• CompreFace API: Railway Production Endpoint</li>
