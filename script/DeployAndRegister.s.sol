@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Script, console} from "forge-std/Script.sol";
-import {faceRecognitionValidator} from "../contracts/validators/faceRecognitionValidator.sol";
+import {FacialRecognitionValidator} from "../contracts/validators/faceRecognitionValidator.sol";
 import {FRVMWalletFactory} from "../contracts/factories/FRVMWalletFactory.sol";
 import {MerchantAccount} from "../contracts/merchants/MerchantAccount.sol";
 import {CheckoutProcessor} from "../contracts/merchants/CheckoutProcessor.sol";

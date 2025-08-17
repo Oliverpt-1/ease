@@ -98,6 +98,36 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack }
       if (result.result?.[0]?.embedding) {
         console.log('EMBEDDING:', result.result[0].embedding)
       }
+<<<<<<< Updated upstream
+=======
+
+      const embedding = result.result[0].embedding
+      console.log('FRESH EMBEDDING FOR PAYMENT:', embedding)
+
+      // Create wallet client with ENS and fresh embedding
+      await createWalletClient(ensName, embedding)
+      
+      // Send payment transaction
+      const recipient = '0x742d35Cc6635C0532925a3b8D77f2A8e1E0e07b2' // Merchant address
+      const amountInWei = BigInt(Math.floor(totalAmount * 100 * 10**16)) // Convert dollars to wei
+      
+      const txHash = await sendPayment(recipient, amountInWei)
+      console.log('Payment transaction:', txHash)
+
+      // Success
+      setIsVerifying(false)
+      setIsVerified(true)
+      stopCamera()
+
+      setTimeout(() => {
+        onVerificationComplete()
+      }, 1500)
+
+    } catch (error) {
+      console.error('Verification failed:', error)
+      setIsVerifying(false)
+      alert(`Verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+>>>>>>> Stashed changes
     }
 
     // Complete

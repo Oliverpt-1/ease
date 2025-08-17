@@ -5,7 +5,6 @@ import { BillEntry } from "@/components/bill-entry"
 import { TipSelection } from "@/components/tip-selection"
 import { FaceVerification } from "@/components/face-verification"
 import { PaymentConfirmation } from "@/components/payment-confirmation"
-import { FaceTest } from "@/components/face-test"
 import Image from "next/image"
 
 type Step = "bill-entry" | "tip-selection" | "face-verification" | "confirmation"
@@ -86,10 +85,6 @@ export default function Home() {
           />
         )}
 
-        {/* Face Test Component - for testing CompreFace integration */}
-        <div className="mt-8">
-          <FaceTest />
-        </div>
       </div>
     </main>
   )

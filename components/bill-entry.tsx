@@ -16,7 +16,6 @@ export function BillEntry({ onSubmit, onPayment }: BillEntryProps) {
   const [error, setError] = useState<string>("")
   const [selectedTip, setSelectedTip] = useState<number | null>(null)
   const [customTip, setCustomTip] = useState<string>("")
-  const [ensName, setEnsName] = useState<string>("")
 
   const billAmount = Number.parseFloat(amount) || 0
   const tipPercentages = [10, 15, 20]
@@ -44,11 +43,6 @@ export function BillEntry({ onSubmit, onPayment }: BillEntryProps) {
 
     if (selectedTip === null) {
       setError("Please select a tip amount")
-      return
-    }
-
-    if (!ensName.trim()) {
-      setError("Please enter an ENS name")
       return
     }
 
@@ -151,20 +145,9 @@ export function BillEntry({ onSubmit, onPayment }: BillEntryProps) {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-center">Enter ENS Name</h3>
-            <Input
-              type="text"
-              placeholder="yourname.eth"
-              value={ensName}
-              onChange={(e) => setEnsName(e.target.value)}
-              className="text-center"
-            />
-          </div>
-
           <Button
             onClick={handlePayment}
-            disabled={billAmount <= 0 || selectedTip === null || !ensName.trim()}
+            disabled={billAmount <= 0 || selectedTip === null}
             className="w-full"
             size="lg"
           >
