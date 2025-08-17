@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useCompreface } from "@/components/use-compreface"
 import { useWalletClient } from "@/components/use-wallet-client"
+import { fetchStoredEmbedding } from "@/utils/fetch-stored-embedding"
 import { ArrowLeft, Camera, CheckCircle } from "lucide-react"
-import { createPublicClient, http, parseAbi, encodePacked } from 'viem'
+import { createPublicClient, createWalletClient, http, parseAbi } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
 import { sepolia } from 'viem/chains'
 
 interface FaceVerificationProps {
@@ -21,40 +23,40 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack, 
   const [isVerified, setIsVerified] = useState<boolean>(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [capturedImage, setCapturedImage] = useState<Blob | null>(null)
+  const [freshEmbedding, setFreshEmbedding] = useState<number[] | null>(null)
+  const [storedEmbedding, setStoredEmbedding] = useState<number[] | null>(null)
+  const [verificationStep, setVerificationStep] = useState<'camera' | 'processing' | 'verifying' | 'complete'>('camera')
+  const [verificationResult, setVerificationResult] = useState<string>('')
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   
-  const { recognize, loading } = useCompreface()
-  const { createWalletClient, sendPayment } = useWalletClient()
+  const { recognize } = useCompreface()
+  const { createWalletClient: createWallet, sendPayment } = useWalletClient()
 
   // Effect to connect stream to video element when both are available
   useEffect(() => {
     if (stream && videoRef.current) {
-      const video = videoRef.current
-      video.srcObject = stream
-      video.play().catch(() => {})
+      videoRef.current.srcObject = stream
+    }
+  }, [stream])
+
+  // Cleanup camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop())
+      }
     }
   }, [stream])
 
   const startCamera = async () => {
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: "user",
-          width: { ideal: 640 },
-          height: { ideal: 480 }
-        }
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: 640, height: 480 } 
       })
       setStream(mediaStream)
     } catch (error) {
-      console.error("Error accessing camera:", error)
-    }
-  }
-
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop())
-      setStream(null)
+      console.error('Error accessing camera:', error)
     }
   }
 
@@ -65,26 +67,21 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack, 
         return
       }
 
-      const video = videoRef.current
       const canvas = canvasRef.current
-      const ctx = canvas.getContext('2d')
+      const video = videoRef.current
+      const context = canvas.getContext('2d')
       
-      if (!ctx || video.readyState < video.HAVE_CURRENT_DATA) {
+      if (!context) {
         resolve(null)
         return
       }
 
-      canvas.width = video.videoWidth || 640
-      canvas.height = video.videoHeight || 480
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      context.drawImage(video, 0, 0)
       
-      try {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-      } catch (drawError) {
-        resolve(null)
-        return
-      }
-
       canvas.toBlob((blob) => {
+        setCapturedImage(blob)
         resolve(blob)
       }, 'image/jpeg', 0.8)
     })
@@ -92,195 +89,235 @@ export function FaceVerification({ totalAmount, onVerificationComplete, onBack, 
 
   const handleVerification = async () => {
     setIsVerifying(true)
+    setVerificationStep('processing')
 
     try {
-      // Capture image and wait for it
-      const imageBlob = await captureImage()
+      console.log('🔍 Starting real facial verification for:', ensName)
       
-      if (imageBlob) {
-        // Get embedding
-        const recognizeResult = await recognize(imageBlob)
-        
-        if (recognizeResult.result?.[0]?.embedding) {
-          console.log('EMBEDDING:', recognizeResult.result[0].embedding)
-        }
-
-        const embedding = recognizeResult.result[0].embedding
-        console.log('FRESH EMBEDDING FOR PAYMENT:', embedding)
-
-        // Test facial signature validation with REAL contract call
-        console.log('🔍 Testing ACTUAL facial signature validation...')
-        
-        const publicClient = createPublicClient({
-          chain: sepolia,
-          transport: http('https://eth-sepolia.g.alchemy.com/v2/TAna5TyVIgrgtMUxfEYgF'),
-        })
-
-        // Get the wallet address for this ENS name
-        const FACTORY_ADDRESS = '0xBC7ae078641EF45B6601aa952E495703ddDC2f28'
-        const VALIDATOR_ADDRESS = '0xAAB9f7d4aAF5B4aa4A4bdDD35b19CC6b5DC7733C'
-        
-        // Extract subdomain from full ENS name (e.g., "bro" from "bro.eaze.eth")
-        const subdomain = ensName.split('.')[0]
-        
-        const walletAddress = await publicClient.readContract({
-          address: FACTORY_ADDRESS as `0x${string}`,
-          abi: parseAbi(['function subdomainToWallet(string) view returns (address)']),
-          functionName: 'subdomainToWallet',
-          args: [subdomain],
-        })
-        
-        console.log(`📍 Wallet for ${ensName} (subdomain: ${subdomain}): ${walletAddress}`)
-        
-        if (walletAddress === '0x0000000000000000000000000000000000000000') {
-          throw new Error(`❌ No wallet found for ENS name: ${ensName}`)
-        }
-
-        // Convert fresh embedding to contract format (shift to positive range)
-        const embeddingBigInts = embedding.map(n => BigInt(Math.floor((n + 1) * 1000000)))
-        
-        // Encode embedding as signature data
-        const encodedEmbedding = encodePacked(['uint256[]'], [embeddingBigInts])
-        
-        // Call testValidateFacialSignature to test actual Chainlink facial validation
-        console.log('🔍 Calling ACTUAL facial validation with Chainlink...')
-        console.log(`  - Wallet: ${walletAddress}`)
-        console.log(`  - Validator: ${VALIDATOR_ADDRESS}`)
-        
-        const result = await publicClient.readContract({
-          address: VALIDATOR_ADDRESS as `0x${string}`,
-          abi: parseAbi(['function testValidateFacialSignature(address,bytes32,(bytes32,uint256,bytes)) returns (bool,string)']),
-          functionName: 'testValidateFacialSignature',
-          args: [
-            walletAddress, 
-            '0x0000000000000000000000000000000000000000000000000000000000000000',
-            [
-              '0x1234567890123456789012345678901234567890123456789012345678901234', // facial hash
-              BigInt(Date.now()), // timestamp
-              encodedEmbedding // fresh embedding
-            ]
-          ],
-        }) as readonly [boolean, string]
-        
-        const validationResult = result[0]
-        const chainlinkDebugResult = result[1]
-        
-        console.log(`📋 Validator result: ${validationResult}`)
-        console.log(`🔗 Chainlink debug result: "${chainlinkDebugResult}"`)
-        
-        const isValid = validationResult === true
-        
-        if (!isValid) {
-          console.log('❌ Validation failed - checking if user is registered...')
-          throw new Error('❌ Facial signature validation FAILED - face does not match stored embedding')
-        }
-        
-        console.log('✅ Facial signature validation PASSED!')
-        console.log(`🎯 Contract returned: ${validationResult}`)
-        console.log(`🧬 Embedding length: ${embedding.length} dimensions`)
-        console.log(`📊 Wallet: ${walletAddress}`)
-
-        // Create wallet client with ENS and fresh embedding
-        await createWalletClient(ensName, embedding)
-        
-        // Send payment transaction
-        const recipient = '0x742d35Cc6635C0532925a3b8D77f2A8e1E0e07b2' // Merchant address
-        const amountInWei = BigInt(Math.floor(totalAmount * 100 * 10**16)) // Convert dollars to wei
-        
-        const txHash = await sendPayment(recipient, amountInWei)
-        console.log('💰 Payment transaction:', txHash)
-
-        // Success
-        setIsVerifying(false)
-        setIsVerified(true)
-        stopCamera()
-
-        setTimeout(() => {
-          onVerificationComplete()
-        }, 1500)
+      // Step 1: Capture image and get fresh embedding
+      const imageBlob = await captureImage()
+      if (!imageBlob) throw new Error('Failed to capture image')
+      
+      const recognizeResult = await recognize(imageBlob)
+      if (!recognizeResult.result?.[0]?.embedding) {
+        throw new Error('Failed to get facial embedding from image')
       }
-    } catch (error) {
-      console.error('Verification failed:', error)
+
+      const freshEmbedding = recognizeResult.result[0].embedding
+      setFreshEmbedding(freshEmbedding)
+      console.log('✅ Fresh embedding captured:', freshEmbedding.slice(0, 5))
+
+      // Step 2: Get wallet address from ENS
+      const publicClient = createPublicClient({
+        chain: sepolia,
+        transport: http('https://eth-sepolia.g.alchemy.com/v2/TAna5TyVIgrgtMUxfEYgF'),
+      })
+
+      const FACTORY_ADDRESS = '0xBC7ae078641EF45B6601aa952E495703ddDC2f28'
+      const subdomain = ensName.split('.')[0]
+      
+      const walletAddress = await publicClient.readContract({
+        address: FACTORY_ADDRESS as `0x${string}`,
+        abi: parseAbi(['function subdomainToWallet(string) view returns (address)']),
+        functionName: 'subdomainToWallet',
+        args: [subdomain],
+      }) as string
+      
+      console.log(`📍 Wallet for ${ensName}: ${walletAddress}`)
+      
+      if (walletAddress === '0x0000000000000000000000000000000000000000') {
+        throw new Error(`No wallet found for ENS name: ${ensName}`)
+      }
+
+      // Step 3: Fetch stored embedding from validator contract
+      const storedEmbedding = await fetchStoredEmbedding(walletAddress)
+      if (!storedEmbedding) {
+        throw new Error('No stored embedding found for this user')
+      }
+      
+      setStoredEmbedding(storedEmbedding)
+      console.log('✅ Stored embedding fetched:', storedEmbedding.slice(0, 5))
+
+      // Step 4: Run Chainlink verification
+      setVerificationStep('verifying')
+      await runChainlinkVerification(storedEmbedding, freshEmbedding)
+
+    } catch (error: any) {
+      console.error('❌ Verification failed:', error)
+      setVerificationResult(error.message)
+      setVerificationStep('complete')
+    } finally {
       setIsVerifying(false)
-      alert(`Verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  const runChainlinkVerification = async (storedEmbedding: number[], freshEmbedding: number[]) => {
+    try {
+      const CHAINLINK_CONTRACT = '0xb0E7ceeA189C96dBFf02aC7819699Dcf1F81b95b'
+      const SUBSCRIPTION_ID = 5463
+
+      const publicClient = createPublicClient({
+        chain: sepolia,
+        transport: http('https://eth-sepolia.g.alchemy.com/v2/TAna5TyVIgrgtMUxfEYgF'),
+      })
+
+      const account = privateKeyToAccount(`0x6fddd15647f0bfe65a1b1abac121b1b71c1d3349b257595cde7b816a89029561`)
+      const walletClient = createWalletClient({
+        account,
+        chain: sepolia,
+        transport: http('https://eth-sepolia.g.alchemy.com/v2/TAna5TyVIgrgtMUxfEYgF'),
+      })
+
+      const chainlinkAbi = parseAbi([
+        'function sendRequest(uint64 subscriptionId, string[] calldata args) external returns (bytes32 requestId)',
+        'function verificationResult() external view returns (string)'
+      ])
+
+      // Convert embeddings to JSON strings
+      const sourceJson = JSON.stringify(storedEmbedding)
+      const targetJson = JSON.stringify([freshEmbedding])
+
+      console.log('🔗 Sending to Chainlink for verification...')
+
+      // Send request to Chainlink
+      const hash = await walletClient.writeContract({
+        address: CHAINLINK_CONTRACT,
+        abi: chainlinkAbi,
+        functionName: 'sendRequest',
+        args: [BigInt(SUBSCRIPTION_ID), [sourceJson, targetJson]]
+      })
+
+      // Wait for transaction
+      await publicClient.waitForTransactionReceipt({ hash })
+      console.log('✅ Chainlink request sent')
+
+      // Poll for result - increased timeout for Chainlink Functions
+      let attempts = 0
+      while (attempts < 60) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        try {
+          const result = await publicClient.readContract({
+            address: CHAINLINK_CONTRACT,
+            abi: chainlinkAbi,
+            functionName: 'verificationResult'
+          }) as string
+
+          console.log(`🔍 Polling attempt ${attempts + 1}: result = "${result}"`)
+          
+          if (result && result.trim() !== '' && result !== '0x' && result !== '""') {
+            console.log('🎯 Verification result:', result)
+            const parsedResult = JSON.parse(result)
+            const similarity = parsedResult.result?.[0]?.similarity || 0
+            
+            setVerificationResult(`Similarity: ${similarity}`)
+            setIsVerified(similarity > 0.7) // Threshold for verification
+            setVerificationStep('complete')
+            
+            if (similarity > 0.7) {
+              setTimeout(() => onVerificationComplete(), 2000)
+            }
+            return
+          }
+        } catch (err) {
+          console.log(`⏳ Waiting for Chainlink response... (attempt ${attempts + 1}/60)`)
+        }
+        
+        attempts++
+      }
+
+      throw new Error('Timeout waiting for verification result')
+      
+    } catch (error) {
+      console.error('❌ Chainlink verification failed:', error)
+      throw error
     }
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft className="h-4 w-4" />
+            Back
           </Button>
-          <CardTitle className="flex-1 text-center">Face Verification</CardTitle>
+          <CardTitle>Face Verification</CardTitle>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="text-center space-y-2">
-          <p className="text-sm text-muted-foreground">Total Amount</p>
-          <p className="text-3xl font-bold text-primary">${totalAmount.toFixed(2)}</p>
+      <CardContent className="space-y-4">
+        <div className="text-center">
+          <div className="text-lg font-semibold">Payment: ${totalAmount.toFixed(2)}</div>
+          <div className="text-sm text-gray-600">For: {ensName}</div>
         </div>
 
-        <div className="relative bg-muted rounded-lg overflow-hidden aspect-square">
-          {stream ? (
-            <video 
-              ref={videoRef} 
-              autoPlay 
-              playsInline 
-              muted 
-              className="w-full h-full object-cover"
-              style={{ transform: 'scaleX(-1)' }}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center space-y-4">
-                <Camera className="h-16 w-16 text-muted-foreground mx-auto" />
-                <p className="text-muted-foreground">Camera not active</p>
-              </div>
+        {verificationStep === 'camera' && (
+          <div className="space-y-4">
+            <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden">
+              {!stream ? (
+                <div className="flex items-center justify-center h-full">
+                  <Button onClick={startCamera}>
+                    <Camera className="h-4 w-4 mr-2" />
+                    Start Camera
+                  </Button>
+                </div>
+              ) : (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              )}
             </div>
-          )}
+            
+            {stream && (
+              <Button 
+                onClick={handleVerification} 
+                disabled={isVerifying}
+                className="w-full"
+              >
+                {isVerifying ? 'Verifying...' : 'Capture & Verify Face'}
+              </Button>
+            )}
+          </div>
+        )}
 
-          {isVerifying && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-              <div className="text-center text-white space-y-2">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-                <p>Verifying...</p>
+        {verificationStep === 'processing' && (
+          <div className="text-center space-y-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p>Processing facial recognition...</p>
+          </div>
+        )}
+
+        {verificationStep === 'verifying' && (
+          <div className="text-center space-y-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p>Verifying with Chainlink...</p>
+          </div>
+        )}
+
+        {verificationStep === 'complete' && (
+          <div className="text-center space-y-4">
+            {isVerified ? (
+              <div className="text-green-600">
+                <CheckCircle className="h-12 w-12 mx-auto mb-2" />
+                <h3 className="text-lg font-semibold">Verification Successful!</h3>
+                <p className="text-sm">{verificationResult}</p>
               </div>
-            </div>
-          )}
-
-          {isVerified && (
-            <div className="absolute inset-0 bg-primary/90 flex items-center justify-center">
-              <div className="text-center text-white space-y-2">
-                <CheckCircle className="h-16 w-16 mx-auto" />
-                <p className="text-lg font-semibold">Verified!</p>
+            ) : (
+              <div className="text-red-600">
+                <div className="h-12 w-12 mx-auto mb-2 bg-red-100 rounded-full flex items-center justify-center">
+                  ❌
+                </div>
+                <h3 className="text-lg font-semibold">Verification Failed</h3>
+                <p className="text-sm">{verificationResult}</p>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        <div className="space-y-4">
-          <p className="text-center text-sm text-muted-foreground">
-            Position your face in the camera frame and tap verify to complete payment
-          </p>
-
-          {!stream && !isVerified && (
-            <Button onClick={startCamera} variant="outline" className="w-full bg-transparent">
-              <Camera className="h-4 w-4 mr-2" />
-              Start Camera
-            </Button>
-          )}
-
-          {stream && !isVerifying && !isVerified && (
-            <Button onClick={handleVerification} className="w-full" size="lg">
-              Verify & Pay ${totalAmount.toFixed(2)}
-            </Button>
-          )}
-        </div>
-
-        {/* Hidden canvas for image capture */}
-        <canvas ref={canvasRef} style={{ display: 'none' }} />
+        <canvas ref={canvasRef} className="hidden" />
       </CardContent>
     </Card>
   )
