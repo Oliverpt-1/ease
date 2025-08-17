@@ -1,6 +1,6 @@
 # Ease - Facial Recognition Verified Multi-chain Smart Wallets
 
-Ease is a revolutionary decentralized application that combines facial recognition technology with smart contract wallets, providing secure, passwordless wallet management with seamless cross-chain functionality.
+Ease is a decentralized application that combines facial recognition technology with smart contract wallets, providing secure, passwordless wallet management with seamless cross-chain functionality.
 
 ## Features
 
