@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 import "../interfaces/IfaceRecognitionValidator.sol";
-import "../ens/UsernameRegistry.sol";
+import "../factories/FRVMWalletFactory.sol";
 
 contract MerchantAccount {
     struct MerchantProfile {
@@ -30,10 +30,11 @@ contract MerchantAccount {
     mapping(address => uint256) public merchantBalances;
 
     IFaceRecognitionValidator public immutable frvmValidator;
-    UsernameRegistry public immutable usernameRegistry;
+    FRVMWalletFactory public immutable walletFactory;
 
     event MerchantRegistered(address indexed merchant, string name);
-    event PaymentRequestCreated(bytes32 indexed requestId, address indexed merchant, string customerUsername, uint256 amount);
+    event PaymentRequestCreated(
+    bytes32 indexed requestId, address indexed merchant, string customerUsername, uint256 amount);
     event PaymentCompleted(bytes32 indexed requestId, address indexed customer, uint256 amount);
     event PaymentCancelled(bytes32 indexed requestId, address indexed merchant);
     event FundsWithdrawn(address indexed merchant, uint256 amount);
@@ -56,9 +57,9 @@ contract MerchantAccount {
         _;
     }
 
-    constructor(address _frvmValidator, address _usernameRegistry) {
+    constructor(address _frvmValidator, address _walletFactory) {
         frvmValidator = IFaceRecognitionValidator(_frvmValidator);
-        usernameRegistry = UsernameRegistry(_usernameRegistry);
+        walletFactory = FRVMWalletFactory(_walletFactory);
     }
 
     function registerMerchant(string calldata name) external {
@@ -80,7 +81,7 @@ contract MerchantAccount {
         address token,
         uint256 expiryDuration
     ) external onlyMerchant returns (bytes32 requestId) {
-        address customer = usernameRegistry.resolveUsername(customerUsername);
+        address customer = walletFactory.resolve(customerUsername);
         require(customer != address(0), "Customer not found");
 
         requestId = keccak256(abi.encodePacked(
@@ -118,7 +119,7 @@ contract MerchantAccount {
         if (request.isPaid) revert PaymentAlreadyCompleted();
         if (block.timestamp > request.expiryTimestamp) revert PaymentExpired();
 
-        address customer = usernameRegistry.resolveUsername(request.customerUsername);
+        address customer = walletFactory.resolve(request.customerUsername);
         require(customer == msg.sender, "Unauthorized customer");
 
         bytes32 paymentHash = keccak256(abi.encodePacked(

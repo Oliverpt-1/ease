@@ -20,16 +20,19 @@ contract FRVMWalletFactory {
     IFaceRecognitionValidator public immutable frvmValidator;
     address public immutable kernelImplementation;
 
-    mapping(bytes32 => address) public deployedWallets;
-    mapping(address => bool) public isValidWallet;
+    mapping(string => address) public subdomainToWallet;
+    mapping(address => string) public walletToSubdomain;
+    mapping(bytes32 => uint256) public nextWalletIndex;
+    mapping(bytes32 => address) public nameToWallet; // ENS node to wallet address
 
     event WalletDeployed(
         address indexed wallet,
-        address indexed owner,
-        bytes32 salt,
         string username,
-        bytes32 facialHash
+        bytes32 facialHash,
+        uint256 index
     );
+    
+    event WalletCreated(address indexed wallet, string username);
 
     constructor(
         address _kernelFactory,
@@ -43,57 +46,83 @@ contract FRVMWalletFactory {
 
     function createWallet(
         string calldata username,
-        bytes32 facialHash,
-        uint256 index
+        bytes32 facialHash
     ) external returns (address wallet) {
-        bytes32 salt = frvmValidator.generateWalletSalt(facialHash, index);
+        require(subdomainToWallet[username] == address(0), "Username already taken");
+        require(facialHash != bytes32(0), "Invalid facial hash");
         
-        require(deployedWallets[salt] == address(0), "Wallet already exists");
-
-        bytes memory initData = abi.encode(username, facialHash, index);
+        uint256 index = nextWalletIndex[facialHash];
+        bytes32 salt = keccak256(abi.encodePacked(facialHash, index));
         
         wallet = kernelFactory.createAccount(
             kernelImplementation,
-            initData,
+            abi.encode(facialHash, index),
             uint256(salt)
         );
 
         IKernelAccount(wallet).initialize(
             address(frvmValidator),
-            initData
+            abi.encode(facialHash)
         );
 
-        deployedWallets[salt] = wallet;
-        isValidWallet[wallet] = true;
+        // Compute ENS node for subdomain
+        bytes32 rootNode = _namehash("eaze.eth");
+        bytes32 labelHash = keccak256(bytes(username));
+        bytes32 node = keccak256(abi.encodePacked(rootNode, labelHash));
 
-        emit WalletDeployed(wallet, msg.sender, salt, username, facialHash);
+        // Store mappings
+        nameToWallet[node] = wallet;
+        subdomainToWallet[username] = wallet;
+        walletToSubdomain[wallet] = username;
+        nextWalletIndex[facialHash] = index + 1;
+
+        emit WalletDeployed(wallet, username, facialHash, index);
+        emit WalletCreated(wallet, username);
+
+        return wallet;
     }
 
-    function predictWalletAddress(
-        bytes32 facialHash,
-        uint256 index
-    ) external view returns (address) {
-        bytes32 salt = frvmValidator.generateWalletSalt(facialHash, index);
-        return _predictAddress(salt);
+    // ENS Resolver: addr
+    function addr(bytes32 node) external view returns (address) {
+        return nameToWallet[node];
     }
 
-    function _predictAddress(bytes32 salt) internal view returns (address) {
-        bytes32 hash = keccak256(
-            abi.encodePacked(
-                bytes1(0xff),
-                address(kernelFactory),
-                salt,
-                keccak256(abi.encodePacked(kernelImplementation))
-            )
-        );
-        return address(uint160(uint256(hash)));
+    // supportsInterface: For ERC-165 and ENS addr interface
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == 0x01ffc9a7 || // ERC-165
+               interfaceId == 0x3b3b57de;  // ENS addr
     }
 
-    function getWalletBySalt(bytes32 salt) external view returns (address) {
-        return deployedWallets[salt];
+    function resolve(string calldata subdomain) external view returns (address) {
+        return subdomainToWallet[subdomain];
     }
 
-    function isWalletValid(address wallet) external view returns (bool) {
-        return isValidWallet[wallet];
+    function getWalletSubdomain(address wallet) external view returns (string memory) {
+        return walletToSubdomain[wallet];
+    }
+
+    // Internal namehash helper
+    function _namehash(string memory name) internal pure returns (bytes32) {
+        bytes32 node = 0x0000000000000000000000000000000000000000000000000000000000000000;
+        uint256 len = bytes(name).length;
+        uint256 i = len;
+        while (i > 0) {
+            uint256 j = i;
+            while (j > 0 && bytes(name)[j - 1] != ".") j--;
+            string memory label = _substring(name, j, i - j);
+            node = keccak256(abi.encodePacked(node, keccak256(bytes(label))));
+            i = j > 0 ? j - 1 : 0;
+        }
+        return node;
+    }
+
+    // Internal substring helper
+    function _substring(string memory str, uint256 start, uint256 len) internal pure returns (string memory) {
+        bytes memory strBytes = bytes(str);
+        bytes memory result = new bytes(len);
+        for (uint256 k = 0; k < len; k++) {
+            result[k] = strBytes[start + k];
+        }
+        return string(result);
     }
 }
