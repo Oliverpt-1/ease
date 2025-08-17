@@ -6,6 +6,7 @@ import {faceRecognitionValidator} from "../contracts/validators/faceRecognitionV
 import {FRVMWalletFactory} from "../contracts/factories/FRVMWalletFactory.sol";
 import {MerchantAccount} from "../contracts/merchants/MerchantAccount.sol";
 import {CheckoutProcessor} from "../contracts/merchants/CheckoutProcessor.sol";
+import {Bootstrap} from "../lib/erc7579-implementation/src/utils/Bootstrap.sol";
 
 // Concrete implementation of the abstract validator for deployment
 contract FaceRecognitionValidatorImpl is faceRecognitionValidator {
