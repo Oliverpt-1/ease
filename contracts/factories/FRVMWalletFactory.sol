@@ -4,15 +4,20 @@ pragma solidity ^0.8.28;
 import "../interfaces/IfaceRecognitionValidator.sol";
 
 interface IKernelFactory {
+    // Regular Kernel Factory signature (not Meta Factory)
     function createAccount(
-        address implementation,
         bytes calldata data,
-        uint256 salt
-    ) external returns (address);
+        bytes32 salt
+    ) external payable returns (address);
 }
 
-interface IKernelAccount {
-    function initialize(address validator, bytes calldata data) external;
+interface IKernel {
+    function initialize(
+        bytes21 _rootValidator,
+        address hook,
+        bytes calldata validatorData,
+        bytes calldata hookData
+    ) external;
 }
 
 contract FRVMWalletFactory {
@@ -54,17 +59,24 @@ contract FRVMWalletFactory {
         uint256 index = nextWalletIndex[facialHash];
         bytes32 salt = keccak256(abi.encodePacked(facialHash, index));
         
+        // Create ValidationId for our validator (mode 0x01 + validator address)
+        bytes21 validationId = bytes21(bytes.concat(bytes1(0x01), bytes20(address(frvmValidator))));
+        
+        // Prepare initialization calldata for Kernel
+        bytes memory initData = abi.encodeWithSelector(
+            IKernel.initialize.selector,
+            validationId,                    // _rootValidator as ValidationId
+            address(0),                       // hook (none)
+            abi.encode(facialHash),          // validatorData with facial hash
+            ""                               // hookData (empty)
+        );
+        
+        // Create account through Kernel Factory (v3 direct call)
         wallet = kernelFactory.createAccount(
-            kernelImplementation,
-            abi.encode(facialHash, index),
-            uint256(salt)
+            initData,
+            salt
         );
-
-        IKernelAccount(wallet).initialize(
-            address(frvmValidator),
-            abi.encode(facialHash)
-        );
-
+        //not encoding the node correctly
         // Compute ENS node for subdomain
         bytes32 rootNode = _namehash("eaze.eth");
         bytes32 labelHash = keccak256(bytes(username));
@@ -90,29 +102,67 @@ contract FRVMWalletFactory {
     // supportsInterface: For ERC-165 and ENS addr interface
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
         return interfaceId == 0x01ffc9a7 || // ERC-165
-               interfaceId == 0x3b3b57de;  // ENS addr
+               interfaceId == 0x3b3b57de || // ENS addr
+               interfaceId == 0x9061b923;   // ENS wildcard resolution
     }
 
-    function resolve(string calldata subdomain) external view returns (address) {
-        return subdomainToWallet[subdomain];
+    // ENSIP-10 Wildcard Resolution
+    // https://docs.ens.domains/ensip/10
+    function resolve(bytes calldata, bytes calldata data) external view returns(bytes memory) {
+        (, bytes memory result) = address(this).staticcall(data);
+        return result;
     }
 
     function getWalletSubdomain(address wallet) external view returns (string memory) {
         return walletToSubdomain[wallet];
     }
 
-    // Internal namehash helper
+    // Helper function for merchant contracts to resolve usernames
+    function resolveUsername(string calldata username) external view returns (address) {
+        // Compute ENS node for username.eaze.eth
+        bytes32 rootNode = _namehash("eaze.eth");
+        bytes32 labelHash = keccak256(bytes(username));
+        bytes32 node = keccak256(abi.encodePacked(rootNode, labelHash));
+        
+        // Return the wallet address for this ENS node
+        return nameToWallet[node];
+    }
+
+    // Internal namehash helper - ENS compliant
     function _namehash(string memory name) internal pure returns (bytes32) {
         bytes32 node = 0x0000000000000000000000000000000000000000000000000000000000000000;
-        uint256 len = bytes(name).length;
-        uint256 i = len;
-        while (i > 0) {
-            uint256 j = i;
-            while (j > 0 && bytes(name)[j - 1] != ".") j--;
-            string memory label = _substring(name, j, i - j);
-            node = keccak256(abi.encodePacked(node, keccak256(bytes(label))));
-            i = j > 0 ? j - 1 : 0;
+        
+        // Handle empty string
+        if (bytes(name).length == 0) {
+            return node;
         }
+        
+        // Split into labels and process from right to left (TLD first)
+        bytes memory nameBytes = bytes(name);
+        uint256 labelStart = nameBytes.length;
+        
+        // Process from end to beginning
+        for (int256 i = int256(nameBytes.length) - 1; i >= -1; i--) {
+            if (i == -1 || nameBytes[uint256(i)] == ".") {
+                // Found a separator or reached the beginning
+                uint256 labelEnd = uint256(i + 1);
+                uint256 labelLength = labelStart - labelEnd;
+                
+                if (labelLength > 0) {
+                    // Extract label
+                    bytes memory label = new bytes(labelLength);
+                    for (uint256 j = 0; j < labelLength; j++) {
+                        label[j] = nameBytes[labelEnd + j];
+                    }
+                    
+                    // Update node: node = keccak256(node || keccak256(label))
+                    node = keccak256(abi.encodePacked(node, keccak256(label)));
+                }
+                
+                labelStart = uint256(i);
+            }
+        }
+        
         return node;
     }
 

@@ -81,7 +81,7 @@ contract MerchantAccount {
         address token,
         uint256 expiryDuration
     ) external onlyMerchant returns (bytes32 requestId) {
-        address customer = walletFactory.resolve(customerUsername);
+        address customer = walletFactory.resolveUsername(customerUsername);
         require(customer != address(0), "Customer not found");
 
         requestId = keccak256(abi.encodePacked(
@@ -119,7 +119,7 @@ contract MerchantAccount {
         if (request.isPaid) revert PaymentAlreadyCompleted();
         if (block.timestamp > request.expiryTimestamp) revert PaymentExpired();
 
-        address customer = walletFactory.resolve(request.customerUsername);
+        address customer = walletFactory.resolveUsername(request.customerUsername);
         require(customer == msg.sender, "Unauthorized customer");
 
         bytes32 paymentHash = keccak256(abi.encodePacked(
